@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>工單進度追蹤系統</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      padding: 20px;
+      background: #f4f7f9;
+      color: #333;
+    }
+    h1, h2 {
+      text-align: center;
+      color: #333;
+    }
+
+    .button-bar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 15px;
+      margin-bottom: 20px;
+      padding: 10px;
+    }
+
+    .admin-buttons {
+      display: none;
+    }
+    .admin-buttons.active {
+      display: flex;
+      gap: 15px;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      background-color: #4caf50;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 12px 20px;
+      text-align: center;
+      background: #fafafa;
+      color: #555;
+    }
+
+    th {
+      background: #4caf50;
+      color: white;
+      font-weight: bold;
+    }
+
+    tr:hover {
+      background-color: #f1f1f1;
+    }
+
+    .progress-bar {
+      height: 20px;
+      background: #ddd;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .progress-bar-inner {
+      height: 100%;
+      background: #4caf50;
+      text-align: center;
+      color: white;
+      white-space: nowrap;
+      line-height: 20px;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+      transition: opacity 0.3s ease;
+    }
+    .modal-content {
+      background: #fff;
+      padding: 30px;
+      border-radius: 10px;
+      width: 500px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 20px;
+    }
+    .modal-header h3 {
+      margin: 0;
+      color: #333;
+    }
+    .close {
+      cursor: pointer;
+      font-size: 22px;
+      color: red;
+    }
+
+    .modal-content input, .modal-content select, .modal-content textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-size: 16px;
+      background-color: #fafafa;
+    }
+
+    .modal-content input:focus, .modal-content select:focus, .modal-content textarea:focus {
+      border-color: #4caf50;
+      outline: none;
+    }
+
+    .modal-footer {
+      text-align: center;
+    }
+
+    .admin-only {
+      display: none;
+    }
+    .admin-only.active {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+    .admin-only button {
+      background-color: #ff5722;
+    }
+    .admin-only button:hover {
+      background-color: #e64a19;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>工單進度追蹤系統</h1>
+
+  <div class="button-bar">
+    <button onclick="requestAdminPassword()" id="toggleBtn">切換後台</button>
+    <div class="admin-buttons" id="adminButtons">
+      <button onclick="openModal('workOrderModal')">新增工單</button>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>序號</th>
+        <th>機種名稱</th>
+        <th>工單號碼</th>
+        <th>套數</th>
+        <th>負責部門</th>
+        <th>完成進度</th>
+        <th>完成情況</th>
+        <th>欠缺料</th>
+        <th>備註</th>
+        <th class="admin-only" id="adminHeader">操作</th>
+      </tr>
+    </thead>
+    <tbody id="workOrderList">
+      <!-- 動態資料 -->
+    </tbody>
+  </table>
+
+  <div class="modal" id="workOrderModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>新增工單</h3>
+        <span class="close" onclick="closeModal('workOrderModal')">×</span>
+      </div>
+      <input type="text" id="newModel" placeholder="機種名稱" />
+      <input type="text" id="newOrderNo" placeholder="工單號碼" />
+      <input type="number" id="newQuantity" placeholder="套數" />
+      <select id="newDepartment">
+        <option value="組裝">組裝</option>
+        <option value="包裝">包裝</option>
+      </select>
+      <input type="number" id="newProgress" placeholder="完成進度" />
+      <select id="newStatus">
+        <option value="已完成">已完成</option>
+        <option value="備料中">備料中</option>
+        <option value="未備料">未備料</option>
+      </select>
+      <textarea id="newNotes" placeholder="備註"></textarea>
+      <div class="modal-footer">
+        <button onclick="addWorkOrder()">提交</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let isAdmin = false;
+    const workOrders = [];
+
+    function requestAdminPassword() {
+      if (!isAdmin) {
+        const input = prompt("請輸入後台密碼：", "");
+        if (input === "00") {
+          toggleAdminMode();
+        } else {
+          alert("密碼錯誤");
+        }
+      } else {
+        toggleAdminMode();
+      }
+    }
+
+    function toggleAdminMode() {
+      isAdmin = !isAdmin;
+      document.getElementById('toggleBtn').textContent = isAdmin ? '切換前台' : '切換後台';
+      document.getElementById('adminButtons').classList.toggle('active', isAdmin);
+      document.querySelectorAll('.admin-only').forEach(el => {
+        el.classList.toggle('active', isAdmin);
+      });
+      renderWorkOrders();
+    }
+
+    function renderWorkOrders() {
+      const tbody = document.getElementById("workOrderList");
+      tbody.innerHTML = "";
+      workOrders.forEach((order, index) => {
+        const tr = document.createElement("tr");
+
+        const adminButtons = isAdmin ? `
+          <td class="admin-only active">
+            <button onclick="editWorkOrder(${index})">編輯</button>
+            <button onclick="deleteWorkOrder(${index})">刪除</button>
+          </td>
+        ` : '<td class="admin-only"></td>';
+
+        tr.innerHTML = `
+          <td>${index + 1}</td>
+          <td>${order.model}</td>
+          <td>${order.orderNo}</td>
+          <td>${order.quantity}</td>
+          <td>${order.department}</td>
+          <td>
+            <div class="progress-bar">
+              <div class="progress-bar-inner" style="width:${order.progress}%">${order.progress}%</div>
+            </div>
+          </td>
+          <td>${order.status}</td>
+          <td>${order.materials}</td>
+          <td>${order.notes}</td>
+          ${adminButtons}
+        `;
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function addWorkOrder() {
+      const model = document.getElementById("newModel").value;
+      const orderNo = document.getElementById("newOrderNo").value;
+      const quantity = document.getElementById("newQuantity").value;
+      const department = document.getElementById("newDepartment").value;
+      const progress = document.getElementById("newProgress").value;
+      const status = document.getElementById("newStatus").value;
+      const notes = document.getElementById("newNotes").value;
+
+      const materials = (status === '已完成') ? '已備齊' : '欠缺料';
+
+      const newOrder = { model, orderNo, quantity, department, progress, status, materials, notes };
+      workOrders.push(newOrder);
+      renderWorkOrders();
+      closeModal('workOrderModal');
+    }
+
+    function deleteWorkOrder(index) {
+      if (confirm("確定刪除這筆工單嗎?")) {
+        workOrders.splice(index, 1);
+        renderWorkOrders();
+      }
+    }
+
+    function editWorkOrder(index) {
+      const order = workOrders[index];
+      document.getElementById("newModel").value = order.model;
+      document.getElementById("newOrderNo").value = order.orderNo;
+      document.getElementById("newQuantity").value = order.quantity;
+      document.getElementById("newDepartment").value = order.department;
+      document.getElementById("newProgress").value = order.progress;
+      document.getElementById("newStatus").value = order.status;
+      document.getElementById("newNotes").value = order.notes;
+
+      workOrders.splice(index, 1);
+      renderWorkOrders();
+      openModal('workOrderModal');
+    }
+
+    function openModal(modalId) {
+      document.getElementById(modalId).style.display = 'flex';
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).style.display = 'none';
+    }
+  </script>
+</body>
+</html>
